@@ -1,0 +1,6 @@
+/scripts/*_cache
+.Rproj*
+.Rhistory
+.DS_Store
+*/.DS_Store
+*.Rproj
