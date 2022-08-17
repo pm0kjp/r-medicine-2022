@@ -1,0 +1,338 @@
+---
+title: "Obtaining Census Data"
+author: "Joy Payton"
+date: "08/15/2022"
+output: 
+  html_document: 
+    toc: yes
+    toc_depth: 4
+    toc_float: yes
+---
+
+```{r setup, include=FALSE}
+# Note you may need to install some packages!
+# dplyr should be up to date, if not you might have problems with sf.
+# install.packages(c(knitr", "kableExtra", "tidycensus", "dplyr"), dependencies = TRUE)
+
+# You will CERTAINLY need to get a census API key -- read on below.
+
+
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, cache = TRUE)
+library(kableExtra)
+```
+
+## The United States Census Bureau
+
+The US Census Bureau is bound by the Constitution to do a **full** (not sampled) census of all people within the US every ten years. This determines the number of seats in the US House of Representatives and are used to draw district boundaries. This is the *Decennial Census*.
+
+In addition to the full population census, the Census Bureau is also responsible for conducting the *American Community Survey* (ACS) which uses sampling and inferential statistics to make estimates of social factors that affect your patients and research subjects... neighborhood characteristics like:
+
+-   Education levels, demographic characteristics
+-   Poverty rates, mean and median income
+-   Computer usage, housing characteristics
+-   Crime, commuting, and much more!
+
+Note that the ACS also has one and five year versions. Five year ACS data includes estimates for the entire country, while one year versions concentrate on population-dense areas and have smaller sample sizes.
+
+This means that if you're doing analysis on, say, NYC, you can get very up-to-date (but less reliable) 1-year estimates, but if you're interested in studying Iowa, or getting NYC estimates with a smaller margin of error, you'd be better off with a somewhat less current but broader and more reliable 5 year ACS. That's what we'll use in this script -- five year ACS estimates.
+
+There are additional censuses performed by the Census Bureau that we won't talk about, such as an *Economic Census* done every five years and the *Census of Governments* done every five years.
+
+Census data is collected at and aggregated to various levels:
+
+* The country as a whole
+* States / territories
+* Counties
+* ZIP Code Tabulation Areas (approximations of ZIP Codes)
+* Urban areas
+* Census Tracts (1-8k people)
+* Census Block Groups
+* Census Blocks (600 - 3k people)
+* and probably more I've forgotten about!
+
+
+## FIPS
+
+"FIPS" stands for "Federal Information Processing Standards" but often, when you talk to people, they'll apply the term to whatever their particular federal data is... so, e.g., instead of "Census tract identifier" they'll say "the FIPS".  It's a term that therefore ends up having lots of meanings.
+
+There are FIPS codes for states, counties, tracts, and blocks, and when concatenated, they end up being a single geographic id.  For example, the state code for Pennsylvania is 42, the county code for Philadelphia is 101, and the census tract within Philadelphia where the main campus of the Children's Hospital of Philadelphia stands is 036900 (the last two digits can be thought of as 'after the decimal point', so this has a "human" name of Census Tract 369).  Further, the block group is 2, and the full block number is 2011, so you might be using a "GEOID" of 421010369002011 (if the block is included), or just 42101036900 (if you have tract level data only).
+
+## Access to Census Data
+
+The website of the Census Bureau (<https://www.census.gov>) is a veritable treasure trove of data about populations. It can be hard to manage the sheer quantity of data.
+
+You can obtain data and download it in the Census Data browser at <https://data.census.gov/>. The tables you will find here are optimized for **human readability**, not always for processing via script. But using these tables can give you an idea of what kind of data is available, the short name / encoding for variables, and give you access to notes about your data.
+
+### APIs (Application Programming Interfaces)
+
+Plan to work with Census Bureau data over and over again? It's worth the time to use APIs instead of downloading data from the website manually.
+
+This is what the [Census Bureau says](https://www.census.gov/content/dam/Census/library/publications/2020/acs/acs_api_handbook_2020_ch02.pdf) about API usage:
+
+> Any user may query small quantities of data with minimal restrictions (up to 50 variables in a single query, and up to 500 queries per IP address per day). However, more than 500 queries per IP address per day requires that you register for an API key.
+
+<https://www.census.gov/content/dam/Census/library/publications/2020/acs/acs_api_handbook_2020_ch02.pdf>
+
+From the [same source](https://www.census.gov/content/dam/Census/library/publications/2020/acs/acs_api_handbook_2020_ch02.pdf):
+
+> Once you have an API key, you can extract information from Census Bureau data sets using a variety of tools including JSON, R, Python, or even by typing a query string into the URL of a Web browser.
+
+The Census Bureau offers **free** API credentials at <https://api.census.gov/data/key_signup.html>.  If you don't have a key, sign up for one now... ***you'll need it for this script to work!***
+
+Check out their [list of API endpoints](https://www.census.gov/data/developers/data-sets.html).
+
+[`tidycensus`](https://cran.r-project.org/package=tidycensus) is a package that helps you work with specific APIs offered by the Census Bureau.
+
+## Caveats
+
+### Granularity of Data
+
+Census data is very very specific.  If, for example, you're interested in income data for a given tract, you might find columns that include descriptions like:
+
+* INCOME AND BENEFITS (IN 2017 INFLATION-ADJUSTED DOLLARS) - Total households - Less than $10,000
+* INCOME AND BENEFITS (IN 2017 INFLATION-ADJUSTED DOLLARS) - Total households - $10,000 to $14,999
+* INCOME AND BENEFITS (IN 2017 INFLATION-ADJUSTED DOLLARS) - Total households - $15,000 to $24,999
+* INCOME AND BENEFITS (IN 2017 INFLATION-ADJUSTED DOLLARS) - Total households - $25,000 to $34,999
+* ... and so on ..
+
+Or:
+
+* INCOME AND BENEFITS (IN 2017 INFLATION-ADJUSTED DOLLARS) - Families - Less than $10,000
+* INCOME AND BENEFITS (IN 2017 INFLATION-ADJUSTED DOLLARS) - Families - $10,000 to $14,999
+* ... and so on ...
+
+Or: 
+
+* INCOME AND BENEFITS (IN 2017 INFLATION-ADJUSTED DOLLARS) - With Supplemental Security Income - Mean Supplemental Security Income (dollars)
+* INCOME AND BENEFITS (IN 2017 INFLATION-ADJUSTED DOLLARS) - With cash public assistance income - Mean cash public assistance income (dollars)
+* ... and so on...
+
+Or:
+
+* INCOME AND BENEFITS (IN 2017 INFLATION-ADJUSTED DOLLARS) - Median earnings for workers (dollars)
+* INCOME AND BENEFITS (IN 2017 INFLATION-ADJUSTED DOLLARS) - Median earnings for male full-time, year-round workers (dollars)
+* INCOME AND BENEFITS (IN 2017 INFLATION-ADJUSTED DOLLARS) - Median earnings for female full-time, year-round workers (dollars)
+
+You will likely need to do a bit of honing your question:  families only, or all households (say, a single person, or a group home)?  Do you want to look at statistics across the board or specify race, sex, or hispanicity?  What is considered income, and what benefits?  Do you want to include SSI?  Measure it separately?  What about welfare?
+
+### Estimates and MOEs
+
+You'll also find, for any given measure, a few variables related to it:
+
+* Estimate -- used when a scalar count or value is needed, like median income or number of white women
+* Margin of error -- used to indicate the precision of the estimate
+* Percent -- used when a percent is needed, like percent of families below the poverty line
+* Percent Margin of Error -- used to indicate the precision of the percent estimate
+
+Note that all four columns are generally present although only two make sense for any given measure!
+
+### Sparsity
+
+Every area of the US belongs to a census tract, even if it's an area in which people don't normally live (like a park or lake or airport).  That's why you might see census tracts with little to no data.  Don't panic if you see that a few tracts have very sparse data -- they may be one of these special tracts.
+
+## Let's Get Census Data!
+
+### API Setup
+
+First, I'm going to pull in my API key.  You'll want to change the line below or put a file containing your API key in the place specified below.  I've excluded the "private" folder from being included in the GitHub repo, so you'll want to add your own on your local machine.
+
+```{r key_setting}
+census_key <- readLines("../private/census_api_key.txt")
+```
+
+Let's use `tidycensus`!  It creates a smoother experience for a handful of Census API calls.  I'll set my census key once using `tidycensus::census_key` so that I don't have to keep referencing it in API calls I make.
+
+```{r tidycensus_setup}
+library(tidycensus)
+census_api_key(census_key)
+options(tigris_use_cache = TRUE)
+```
+
+### American Community Survey
+
+#### Understanding Variables 
+
+What variables are available, say, for the five year American Community Survey?  I need to know the end year of the survey I care about, so I can go to <https://www.census.gov/programs-surveys/acs/news/data-releases.html> to discover that 2020 is the latest year end available for download.  Scroll through the variables below ... there are a LOT.
+
+```{r acs_vars_2020}
+library(dplyr)
+
+acs5_vars <- load_variables(2020, "acs5")
+kable(acs5_vars) %>%
+  kable_styling() %>%
+  scroll_box(width = "100%", height = "300px")
+```
+
+
+There are `r nrow(acs5_vars)` **variables** that describe `r length(unique(acs5_vars$concept))` unique **concepts**.
+
+Let's take a look at the concepts that are available:
+
+```{r acs_concepts_2020}
+kable(unique(acs5_vars$concept)) %>%
+  kable_styling() %>%
+  scroll_box(width = "100%", height = "300px")
+```
+
+#### Using `get_acs` With Names
+
+Maybe we want to hone in on, say, median family income for the census tracts that comprise New York City.  Specifically, I want the variable `B19113_001`, which is defined as `MEDIAN FAMILY INCOME IN THE PAST 12 MONTHS (IN 2020 INFLATION-ADJUSTED DOLLARS)`.  In my use of `get_acs` I can use geographical names, like "New York", or the FIPS code for those places.  Here, to foster ease of reading, I've used the county names of the five boroughs.
+
+```{r nyc_median_income}
+nyc_median_income <- get_acs(geography = "tract",
+                             variables = "B19113_001",
+                             state = "NY",
+                             county = c("New York", 
+                                        "Richmond", 
+                                        "Queens", 
+                                        "Kings", 
+                                        "Bronx"),
+                             survey = "acs5")
+
+```
+
+Let's take a peek:
+
+```{r show_nyc_median_income}
+head(nyc_median_income) %>%
+  kable() %>%
+  kable_styling()
+```
+#### Using `get_acs` With Codes
+
+The use of strings, like I've done here, can be very error prone.  Let's do something similar for the City of Philadelphia area using FIPS codes. I can go to <https://www.census.gov/library/reference/code-lists/ansi.html> and discover that the FIPS code for the state of Pennsylvania is 42, and the code for the county I'm interested in, Philadelphia County, is 101.
+
+```{r philly_median_income}
+philly_median_income <- get_acs(geography = "tract",
+                             variables = "B19113_001",
+                             state = 42,
+                             county = 101,
+                             survey = "acs5")
+```
+
+Let's peek at the data.
+
+```{r show_philly_median_income}
+head(philly_median_income) %>%
+  kable() %>%
+  kable_styling()
+```
+
+#### Peeking at our Data
+
+There are `r nrow(nyc_median_income)` census tracts represented in `nyc_median_income` and `r nrow(philly_median_income)` in `philly_median_income`.
+
+Let's take a peek at the New York City data frame and get some summary statistics.
+
+```{r nyc_stats}
+kable(summary(nyc_median_income)) %>%
+  kable_styling()
+```
+
+Why are some of my rows missing data?  They could be tracts that correspond to areas like parks or rivers where there's only a transient population and there's no meaningful way to make predictions about median income.  When we map this data, we might understand more.
+
+### Decennial Census Statistics
+
+The decennial census is a full population data collection, and the number of available variables and geographic levels supported is reduced, when compared to the American Community Survey.
+
+We can get available variables for the decennial census in much the same way as we did for the American Community Survey.  We're going to pull from "summary file 1", or "sf1" of the 2010 Census.  As of August 15, 2022, only the The apportionment results and redistricting data are available for the 2020 Census.
+
+For information about the "sf1" / "sf2" / "sf3" differences, see: 
+
+* https://www.census.gov/programs-surveys/decennial-census/guidance/2000.html
+* https://www.census.gov/programs-surveys/decennial-census/guidance/2010.html
+* https://www.census.gov/programs-surveys/decennial-census/guidance/2020.html
+
+```{r decennial_vars}
+decennial_vars <- load_variables(2010, "sf1")
+```
+
+Once again, there are thousands of variables... specifically, `r nrow(decennial_vars)`.  Let's look at some major concepts related to Hispanic / Latino origin specifically:
+
+```{r show_decennial_vars}
+kable(decennial_vars %>% filter(grepl("HISPANIC", concept)))  %>%
+  kable_styling() %>%
+  scroll_box(width = "100%", height = "300px")
+```
+
+## Use Case: New Clinic
+
+Let's see if we can figure out which columns would be most useful for us to map Hispanic/Latino populations in Philadelphia county in order to plan for a clinic that focuses on Spanish language patients and the particular health care needs of this population.
+
+For now, we'll begin by identifying the variables under the concept "HISPANIC OR LATINO ORIGIN".
+
+```{r filter_by_concept}
+kable(decennial_vars %>% 
+                 filter(concept == "HISPANIC OR LATINO ORIGIN"))
+hisp_lat_vars <- decennial_vars %>% 
+                 filter(concept == "HISPANIC OR LATINO ORIGIN") %>% 
+                 pull(name)
+```
+
+
+
+```{r philly_latino_vars, message = FALSE, results='hide'}
+philly_latino <- get_decennial(geography = "tract",
+                               variables = hisp_lat_vars,
+                               state = 42,
+                               county = 101,
+                               sumfile = "sf1")
+```
+
+Let's take a peek at our data:
+
+```{r show_philly_latino_vars}
+kable(head(philly_latino)) %>%
+  kable_styling()
+```
+
+What's going on with that "variable" column?  Is there just one census variable that we pulled in, P004001?  Why isn't the title of the column P004001?
+
+Let's do some additional investigation.  How many unique values are in "variable"?
+
+```{r unique_vars}
+unique(philly_latino$variable)
+```
+
+OK, so what we have here is "long" data, e.g. we have key-value pairs.  We probably want that spread to a wide format, however:
+
+```{r reshape_data}
+library(tidyr)
+philly_latino_wide <- philly_latino %>% spread(key = "variable", value = "value")
+head(philly_latino_wide) %>%
+  kable() %>%
+  kable_styling()
+```
+
+Great, now we have some info we can map, in order to plan our clinic location(s)  Let's do a quick analysis of which variable might be most useful (statistically speaking):
+
+```{r philly_stats}
+summary(philly_latino_wide)
+```
+
+Well, it looks like sparsity isn't an issue -- we're lucky in that respect.  Let's remind ourselves of what these variables are:
+
+```{r show_vars}
+kable(decennial_vars %>% 
+      filter(concept == "HISPANIC OR LATINO ORIGIN")) %>%
+  kable_styling()
+```
+
+Oh, so maybe we need to do some math.  Let me check my understanding.  Is it true that P004002 + P004003 = P004001?  If so we can calculate a percentage easily.
+
+```{r check_math}
+table(philly_latino_wide$P004002 + philly_latino_wide$P004003 == philly_latino_wide$P004001) %>%
+  kable() %>%
+  kable_styling()
+```
+
+Great, we can find the percentage Latino easily:
+
+```{r find_pct_latino}
+philly_latino_wide <- philly_latino_wide %>% mutate (pct_latino = (P004003/P004001)*100)
+
+kable(philly_latino_wide)
+```
+
+This is great, but it sure would be nice to see this in a map, to understand larger patterns and see these census tracts in the context of where they are in the city!  We'll tackle that later.
+
