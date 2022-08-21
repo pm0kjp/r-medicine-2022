@@ -7,3 +7,4 @@
 .Rproj.user
 .RData
 private
+/scripts/rsconnect/*
