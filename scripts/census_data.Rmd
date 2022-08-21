@@ -12,7 +12,7 @@ output:
 ```{r setup, include=FALSE}
 # Note you may need to install some packages!
 # dplyr should be up to date, if not you might have problems with sf.
-# install.packages(c(knitr", "kableExtra", "tidycensus", "dplyr"), dependencies = TRUE)
+# install.packages(c(knitr", "kableExtra", "tidycensus", "dplyr", "sf", "mapview"), dependencies = TRUE)
 
 # You will CERTAINLY need to get a census API key -- read on below.
 
@@ -176,7 +176,7 @@ kable(unique(acs5_vars$concept)) %>%
 
 #### Using `get_acs` With Names
 
-Maybe we want to hone in on, say, median family income for the census tracts that comprise New York City.  Specifically, I want the variable `B19113_001`, which is defined as `MEDIAN FAMILY INCOME IN THE PAST 12 MONTHS (IN 2020 INFLATION-ADJUSTED DOLLARS)`.  In my use of `get_acs` I can use geographical names, like "New York", or the FIPS code for those places.  Here, to foster ease of reading, I've used the county names of the five boroughs.
+Maybe we want to hone in on, say, median family income for the census tracts that comprise New York City.  Specifically, I want the variable `B19113_001`, which is defined as `MEDIAN FAMILY INCOME IN THE PAST 12 MONTHS (IN 2020 INFLATION-ADJUSTED DOLLARS)`.  In my use of `get_acs` I can use geographical names, like "New York", or the FIPS code for those places.  Here, to foster ease of reading, I've used the county names of the five boroughs.  
 
 ```{r nyc_median_income}
 nyc_median_income <- get_acs(geography = "tract",
@@ -191,23 +191,25 @@ nyc_median_income <- get_acs(geography = "tract",
 
 ```
 
-Let's take a peek:
+Let's take a peek.
 
 ```{r show_nyc_median_income}
 head(nyc_median_income) %>%
   kable() %>%
   kable_styling()
 ```
+
 #### Using `get_acs` With Codes
 
-The use of strings, like I've done here, can be very error prone.  Let's do something similar for the City of Philadelphia area using FIPS codes. I can go to <https://www.census.gov/library/reference/code-lists/ansi.html> and discover that the FIPS code for the state of Pennsylvania is 42, and the code for the county I'm interested in, Philadelphia County, is 101.
+The use of strings, like I've done here, can be very error prone.  Let's do something similar for the City of Philadelphia area using FIPS codes. I can go to <https://www.census.gov/library/reference/code-lists/ansi.html> and discover that the FIPS code for the state of Pennsylvania is 42, and the code for the county I'm interested in, Philadelphia County, is 101.  I've also added a new line, `geometry = TRUE`, to get the polygons I'll need to make a map!
 
 ```{r philly_median_income}
 philly_median_income <- get_acs(geography = "tract",
                              variables = "B19113_001",
                              state = 42,
                              county = 101,
-                             survey = "acs5")
+                             survey = "acs5",
+                             geometry = TRUE)
 ```
 
 Let's peek at the data.
@@ -276,7 +278,8 @@ philly_latino <- get_decennial(geography = "tract",
                                variables = hisp_lat_vars,
                                state = 42,
                                county = 101,
-                               sumfile = "sf1")
+                               sumfile = "sf1",
+                               geometry = TRUE)
 ```
 
 Let's take a peek at our data:
@@ -334,5 +337,73 @@ philly_latino_wide <- philly_latino_wide %>% mutate (pct_latino = (P004003/P0040
 kable(philly_latino_wide)
 ```
 
-This is great, but it sure would be nice to see this in a map, to understand larger patterns and see these census tracts in the context of where they are in the city!  We'll tackle that later.
+This is great, but it sure would be nice to see this in a map, to understand larger patterns and see these census tracts in the context of where they are in the city!  To do this, we'll use a kind of map called a choropleth, where each polygon is colored with an intensity representing the data for that polygon.
+
+First, since we downloaded this using `tidycensus`, our geospatial data isn't in the format we're used to.  In fact, if we look at the structure of `philly_latino_wide`, we'll see that it's not a Spatial Data Frame but is an `sf` type of dat which contains a type of data called `sfc_MULTIPOLYGON`.  We don't have to change the data type, `leaflet` can map `sf` very easily, too.  Still, we're going to want to use the bounding box later, and it's helpful if it's in the location we're accustomed to. Luckily, the `sf` package can handle object transformation for us:
+
+```{r examine_df}
+str(philly_latino_wide, max_level = 2)
+```
+```{r}
+library(sf)
+philly_latino_sdf <- as_Spatial(philly_latino_wide)
+```
+
+Then, I'll create a palette of various shades of green, based on the `pct_latino` variable, using a grey tone for missing data.
+
+```{r set_palette}
+latino_palette <- colorBin("Greens", domain = philly_latino_sdf$pct_latino, bins = 5, na.color = "#808080")
+```
+
+Then, I'll map, setting the `fillColor` to be a function of `pct_latino`.
+
+```{r choropleth}
+leaflet(philly_latino_sdf) %>%
+addPolygons(
+    fillColor = ~latino_palette(philly_latino_sdf$pct_latino),
+    weight = 1,  # border thickness
+    opacity = 0.5, # border opacity
+    color = "darkgrey", # border color
+    fillOpacity = 1,
+    label = paste("Percent Latino: ", philly_latino_sdf$pct_latino, sep = "")) %>%
+  suspendScroll()
+```
+
+This is great for an online presentation, but what about a static map, for use in a print publication?  
+
+
+```{r static_choropleth}
+library(mapview)
+title <- "Philadelphia County 2010"
+
+my_map <- leaflet(philly_latino_sdf) %>%
+  setView(lng = mean(philly_latino_sdf@bbox[1,], na.rm=TRUE), 
+          lat = mean(philly_latino_sdf@bbox[2,], na.rm=TRUE), zoom = 11) %>%
+  addPolygons(
+    fillColor = ~latino_palette(philly_latino_wide$pct_latino),
+    weight = 1,  # border thickness
+    opacity = 1, # border opacity
+    color = "darkgrey", # border color
+    fillOpacity = 1,
+    label = paste("Percent Latino: ", philly_latino_wide$pct_latino, sep = "")) %>%
+  addLegend("bottomright", pal = latino_palette, values = ~philly_latino_wide$pct_latino,
+    title = "Percent Latino",
+    labFormat = labelFormat(suffix = "%"),
+    opacity = 1)%>%
+   addControl(title, position = "topleft")
+
+my_map
+
+```
+
+Now we can use `mapshot` to save a .png of this map!
+
+```{r static_map_files}
+webshot::install_phantomjs()  # You just have to do this once
+mapshot(my_map, file = "../images/my_map.jpg")
+mapshot(my_map, file = "../images/my_map.png")
+```
+
+
+
 

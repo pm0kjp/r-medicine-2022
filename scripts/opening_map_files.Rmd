@@ -29,20 +29,6 @@ You may also have lower level dependencies... this depends a lot on your compute
 * The `echo = TRUE` is standard, you'll see this generally in knitr setup.  It means "please print the actual content of the code chunk to the output file."
 * The `warning` and `message = FALSE` are good to add at the very end so you don't keep seeing messages you don't care about or warnings you know are bogus.
 
-
-### R Markdown
-
-This is an R Markdown File, which is a way to interlace three things:
-
-* R (or other!) programming language
-* Statistical or scientific reasoning about the code we write, and 
-* The output of R code 
-
-... all in one place.  You can export this interweaving of human and computer language as well as the code output to various formats -- pdf, Microsoft Word, or html.  Are you new to R Markdown?  Here are some great resources:
-
-* R Markdown was developed by RStudio.  Read their descriptions and examples on [their site](https://rmarkdown.rstudio.com/).
-* The RStudio gurus wrote a great book about it -- [check it out](https://bookdown.org/yihui/rmarkdown/)!
-
 ### Reproducibility
 
 I aim to make this R Markdown file reproducible, with everything you need, but sometimes public data sources might fail, have URL changes, etc.  If you discover this, tweet me at @KJoyPayton, [reach out on my LinkedIn](https://www.linkedin.com/in/joypayton), or [drop an issue in the repo](https://github.com/pm0kjp/r-medicine-2022/issues) and I'll get it right!  You can always get the latest version of this code at <https://github.com/pm0kjp/r-medicine-2022>
@@ -297,3 +283,5 @@ nyc_senate_map
 Chances are, you have your own data to add to maps -- maybe the latitude and longitude of your customers' street addresses, or the number of stores in each zip code, or the average number of ER visits for patients from different census tracts. 
 
 The important thing is that whatever your proprietary data has as far as geography (Census tracts, zip codes, congressional districts, etc.), that your map has the same data, so that you can combine data using merge.
+
+Note that there are other R libraries that also do a fantastic job of mapping, like `ggmap`.  However, I'm focusing on `leaflet` here because it's an external library in javascript that has been ported to several languages, so you can learn it once and use it anywhere... including in Python, where it's frustratingly packaged as "Folium."  I occasionally teach mapping in Folium using data from Google Cloud Platform's public datasets in BigQuery, so if any of those keywords are meaningful to you, look for me on O'Reilly Media's online instruction platform!

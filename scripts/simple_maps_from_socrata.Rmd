@@ -1,0 +1,128 @@
+---
+title: "Mapping Data from SODA"
+author: "Joy Payton"
+date: '2022-08-18'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+## Load Packages
+
+While there *is* a package for working with Socrata / SODA, here we're going to show you the "manual" method... because learning it this way will help you interact with other APIs as well.  But if you're interested, check out <https://cran.r-project.org/web/packages/RSocrata/index.html>.
+
+You'll almost certainly need to install some packages, see (and uncomment, and run) the first line of code in the chunk below (e.g., please run
+`install.packages(c("rgdal", "leaflet"))`).
+
+You may also have lower level dependencies... this depends a lot on your computer setup.  I, for example, had to `brew install gdal` on my homebrew-enabled Mac running Big Sur.  If you get weird error messages, don't panic! Just try to soldier through by trying to figure out what the main complaint of the error message is, and using Google to help.
+
+```{r packages}
+# install.packages(c("rgdal", "leaflet"))
+library(dplyr)
+library(rgdal)
+library(leaflet)
+```
+
+## Get Data
+
+GeoJSON is a file format that includes geographic features (for example, counties as lists of lat/long points that form closed polygons) and other data (like crime counts or Covid prevalence).  
+
+Below, I'm using GeoJSON endpoints from Socrata data API endpoints. You can replace one or both of the urls below with your own endpoint, **as long as it ends in .geojson**!
+
+Here is an example *points* based data endpoint:
+<https://data.cityofnewyork.us/resource/5uac-w243.geojson> (See <https://data.cityofnewyork.us/Public-Safety/NYPD-Complaint-Data-Current-Year-To-Date-/5uac-w243> for more information)
+
+And here is an example *polygon* based data endpoint:
+<https://data.cityofnewyork.us/resource/imfq-nf3j.geojson> (See <https://data.cityofnewyork.us/City-Government/2020-Census-Tracts-water-areas-included-Tabular/imfq-nf3j> for more information)
+
+Note that we're using `readOGR`, which we will explain more about later in the workshop.  We'll pull in the polygon based endpoint first.
+
+```{r obtain_data_1}
+my_geo_data_1 <- readOGR("https://data.cityofnewyork.us/resource/imfq-nf3j.geojson")
+```
+
+You'll need to know if you have points or polygons in your data. Now, I intentionally brought in polygon data, so this seems silly.  But maybe you're not sure whether your data has points or polygons. Let's find out what we have in your case.  Look at the top line.  It might say something like "SpatialPointsDataFrame" or "SpatialPolygonsDataFrame."  I'm limiting here how deeply we look into the structure by using `max.level`.
+
+```{r what_kind_1}
+str(my_geo_data_1, max.level = 2)
+```
+Great, we have a polygon data frame -- this is a good place to start!
+
+Let's first do a basemap of your area of interest.  I'm guessing at the zoom amount, so you can try a larger or smaller number.  The latitude and longitude I'm taking from the mean of the bounding box values (the bounding box is standard for an `rgdal` object).  This just shows the major geographic features, thanks to the `addTiles()` layer.  We can remove that line if we later decide we don't want the basemap.
+
+```{r base_map}
+my_basemap_1 <- leaflet(my_geo_data_1) %>%
+  setView(lng = mean(my_geo_data_1@bbox[1,], na.rm=TRUE), 
+          lat = mean(my_geo_data_1@bbox[2,], na.rm=TRUE), zoom = 10) %>%
+  addTiles() 
+
+my_basemap_1
+```
+
+Once you're happy with your zoom, you can add to your map!  Spatial polygons are pretty easy to work with.  I'll just add one additional layer to our map!
+
+```{r polygons}
+my_polygon_map <- leaflet(my_geo_data_1) %>%
+  setView(lng = mean(my_geo_data_1@bbox[1,], na.rm=TRUE), 
+          lat = mean(my_geo_data_1@bbox[2,], na.rm=TRUE), zoom = 10) %>%
+  addTiles() %>%
+  addPolygons()
+
+my_polygon_map
+```
+
+OK, that's not the best looking polygon map.  Let's do a bit of tweaking to our polygon layer!
+
+```{r improved_polygons}
+my_polygon_map <- leaflet(my_geo_data_1) %>%
+  setView(lng = mean(my_geo_data_1@bbox[1,], na.rm=TRUE), 
+          lat = mean(my_geo_data_1@bbox[2,], na.rm=TRUE), zoom = 10) %>%
+  addTiles() %>%
+  addPolygons(
+    weight = 1,  # border thickness
+    opacity = 0.5, # border opacity
+    color = "grey", # border color
+    fillColor = "white",
+    fillOpacity = 1
+  )
+
+my_polygon_map
+```
+
+What if you have point data?  You can add circle markers
+
+```{r obtain_data_2}
+my_geo_data_2 <- readOGR("https://data.cityofnewyork.us/resource/5uac-w243.geojson")
+```
+
+
+```{r point_map}
+my_point_map <- leaflet(my_geo_data_2) %>%
+  setView(lng = mean(my_geo_data_2@bbox[1,], na.rm=TRUE), 
+          lat = mean(my_geo_data_2@bbox[2,], na.rm=TRUE), zoom = 10) %>%
+  addTiles() %>%
+  addCircleMarkers()
+
+my_point_map
+```
+
+Ugh once again we struggle with the appearance.  Let's revamp!
+
+```{r improved_point_map}
+my_point_map <- leaflet(my_geo_data_2) %>%
+  setView(lng = mean(my_geo_data_2@bbox[1,], na.rm=TRUE), 
+          lat = mean(my_geo_data_2@bbox[2,], na.rm=TRUE), zoom = 10) %>%
+  addTiles() %>%
+  addCircleMarkers(
+    radius = 3,  # pixel size
+    weight = 1, # edge thickness
+    opacity = 0.5, # edge opacity
+    color = "grey", # edge color
+    fillColor = "white",
+    fillOpacity = 1
+  )
+
+my_point_map
+```

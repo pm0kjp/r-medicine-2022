@@ -1,0 +1,139 @@
+---
+title: "PubMed Counts of Articles"
+author: "Joy Payton"
+date: "2/18/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+## Overview
+
+What are the rates of publication of papers on various topics?
+
+### R Markdown
+
+This is an R Markdown File, which is a way to interlace three things:
+
+* R (or other!) programming language
+* Statistical or scientific reasoning about the code we write, and 
+* The output of R code 
+
+... all in one place.  You can export this interweaving of human and computer language as well as the code output to various formats -- pdf, Microsoft Word, or html.  Are you new to R Markdown?  Here are some great resources:
+
+* R Markdown was developed by RStudio.  Read their descriptions and examples on [their site](https://rmarkdown.rstudio.com/).
+* The RStudio gurus wrote a great book about it -- [check it out](https://bookdown.org/yihui/rmarkdown/)!
+
+## Load Packages
+
+Here we add the packages we'll use.  `tidyverse` helps reshape data, `easyPubMed` simplifies the use of the PubMed API, and `printr` allows us to show data frames more attractively. 
+
+```{r packages}
+library(tidyverse)
+library(easyPubMed)
+library(printr)
+```
+
+## A Single Search
+
+I'd like to search across several years, for several different search terms.  Let's start simply, however, with a single search.  What can PubMed tell me about articles published in 2020 that mention "medicine" and "disparity"?
+
+The results tell me the overall count (600) and give me the first few (from `RetStart` to `RetMax`) matching article IDs.
+
+```{r single_example}
+results <- get_pubmed_ids("2015[Date - Publication] AND medicine disparity")
+results
+```
+
+I can also extract just the count of articles:
+
+```{r show_count}
+results$Count
+```
+
+But I don't want to do that for every combination of year and search term, to get the count of articles!
+
+I'll start by creating my search terms.
+
+## Create Search Terms
+
+Let's create a data frame which contains all the combinations of the variables we want to search for.  First, we'll define three categories that we'll combine.  
+
+* `years` will be the series from 2012 to 2022.  
+* `terms` will be the terms we want to search on.
+
+We'll make the combinatoric using `expand_grid()` from `tidyverse`.
+
+```{r set_terms}
+years <- c(2012:2023)
+
+terms <- c(
+  'medicine disparity', 
+  'medicine racism', 
+  'medicine racial bias')
+
+search_terms <- expand_grid("year" = years,
+                       "term" = terms)
+```
+
+Let's peek!
+
+```{r look_terms_1}
+head(search_terms, 10)
+```
+
+OK, now we'll pad those search terms with the text that the API requires:
+
+```{r wrap_terms}
+search_terms <- search_terms %>%
+  mutate(final = paste(year, 
+                       "[Date - Publication]",
+                       " AND ",
+                       term,
+                       sep = ""
+                       ))
+```
+
+And let's look again:
+
+```{r look_terms_2}
+head(search_terms, 20)
+```
+
+## Search in PubMed
+
+Now we'll make a short function that returns the count of results for a given term:
+
+```{r function}
+count_results <- function(term) {
+  results <- get_pubmed_ids(term)
+  count <- as.integer(results$Count)
+  return(count)
+}
+```
+
+And now we'll use that function to populate a new column.  Note that we're using an `lapply` function that lets us put a pause between searches in order to not go over the "anonymous" API rate supported by PubMed.  
+
+```{r populate_count}
+search_terms <- search_terms %>% 
+  mutate(num_results = lapply(final, function(f) {
+    Sys.sleep(0.5)
+    count_results(f)
+    }))
+```
+
+## Visualize the Data
+
+`ggplot` lets us take a look at our results graphically:
+
+```{r visualize}
+ggplot(search_terms, 
+       aes(x=year, y=num_results)) +
+  geom_col() +
+  facet_wrap(term ~ .) +
+  xlab("Year") +
+  ylab("Count") + 
+  ggtitle("Healthcare Disparity Articles")
+```
