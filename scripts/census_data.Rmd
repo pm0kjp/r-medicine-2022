@@ -135,7 +135,7 @@ Every area of the US belongs to a census tract, even if it's an area in which pe
 
 ### API Setup
 
-First, I'm going to pull in my API key.  You'll want to change the line below or put a file containing your API key in the place specified below.  I've excluded the "private" folder from being included in the GitHub repo, so you'll want to add your own on your local machine.
+First, I'm going to pull in my API key.  **You have to to put a file containing your API key in the place specified below.** I've included a file in the GitHub repository that I call `fake_census_api_key.txt`, just so you have the `private` folder available to you and know where to put your key file. 
 
 ```{r key_setting}
 census_key <- readLines("../private/census_api_key.txt")
@@ -402,11 +402,8 @@ my_map
 Now we can use `mapshot` to save a .png of this map!
 
 ```{r static_map_files}
+library(mapview)
 webshot::install_phantomjs()  # You just have to do this once
 mapshot(my_map, file = "../images/my_map.jpg")
 mapshot(my_map, file = "../images/my_map.png")
 ```
-
-
-
-
