@@ -22,6 +22,10 @@ knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, cache = TRU
 library(kableExtra)
 ```
 
+## Get This Code
+
+This code is available at https://github.com/pm0kjp/r-medicine-2022/
+
 ## The United States Census Bureau
 
 The US Census Bureau is bound by the Constitution to do a **full** (not sampled) census of all people within the US every ten years. This determines the number of seats in the US House of Representatives and are used to draw district boundaries. This is the *Decennial Census*.
